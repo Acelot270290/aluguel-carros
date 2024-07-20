@@ -4,72 +4,71 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\RegisterRequest;
 use App\Http\Requests\LoginRequest;
+use App\Http\Requests\UpdateUserRequest;
+use App\Actions\AuthActions;
 use App\Models\User;
-use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Str;
-use JWTAuth;
-use Tymon\JWTAuth\Exceptions\JWTException;
 use Illuminate\Http\Request;
 
 class AuthController extends Controller
 {
+    protected $authActions;
+
+    public function __construct(AuthActions $authActions)
+    {
+        $this->authActions = $authActions;
+    }
+
     public function register(RegisterRequest $request)
     {
-        dd('olaaaaaaa');
-        $user = User::create([
-            'name' => $request->name,
-            'email' => $request->email,
-            'email_verified_at' => now(),
-            'password' => Hash::make($request->password),
-            'remember_token' => Str::random(10),
-        ]);
+        $result = $this->authActions->register($request);
 
-        $token = JWTAuth::fromUser($user);
-
-        return response()->json(compact('user', 'token'), 201);
+        return response()->json($result, 201);
     }
 
     public function login(LoginRequest $request)
     {
-        $credentials = $request->only('email', 'password');
+        $result = $this->authActions->login($request);
 
-        try {
-            if (! $token = JWTAuth::attempt($credentials)) {
-                return response()->json(['error' => 'invalid_credentials'], 400);
-            }
-        } catch (JWTException $e) {
-            return response()->json(['error' => 'could_not_create_token'], 500);
+        if (isset($result['error'])) {
+            return response()->json(['error' => $result['error']], $result['status']);
         }
 
-        return response()->json(compact('token'));
+        return response()->json($result);
     }
 
     public function logout(Request $request)
     {
         $this->validate($request, ['token' => 'required']);
 
-        try {
-            JWTAuth::invalidate($request->token);
-            return response()->json(['success' => 'User logged out successfully']);
-        } catch (JWTException $exception) {
-            return response()->json(['error' => 'Sorry, the user cannot be logged out'], 500);
+        $result = $this->authActions->logout($request->token);
+
+        if (isset($result['error'])) {
+            return response()->json(['error' => $result['error']], $result['status']);
         }
+
+        return response()->json($result);
     }
 
     public function getAuthenticatedUser()
     {
-        try {
-            if (! $user = JWTAuth::parseToken()->authenticate()) {
-                return response()->json(['user_not_found'], 404);
-            }
-        } catch (Tymon\JWTAuth\Exceptions\TokenExpiredException $e) {
-            return response()->json(['token_expired'], $e->getStatusCode());
-        } catch (Tymon\JWTAuth\Exceptions\TokenInvalidException $e) {
-            return response()->json(['token_invalid'], $e->getStatusCode());
-        } catch (Tymon\JWTAuth\Exceptions\JWTException $e) {
-            return response()->json(['token_absent'], $e->getStatusCode());
-        }
+        $result = $this->authActions->getAuthenticatedUser();
+        return $result; 
+    }
+    public function listUsers()
+    {
+        $users = $this->authActions->listUsers();
+        return response()->json($users);
+    }
 
-        return response()->json(compact('user'));
+    public function updateUser(UpdateUserRequest $request, User $user)
+    {
+        $updatedUser = $this->authActions->updateUser($request, $user);
+        return response()->json($updatedUser);
+    }
+
+    public function deleteUser(User $user)
+    {
+        $result = $this->authActions->deleteUser($user);
+        return response()->json($result);
     }
 }

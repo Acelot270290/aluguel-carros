@@ -19,7 +19,7 @@ services:
     container_name: nginx
     restart: unless-stopped
     ports:
-      - "8017:80" 
+      - "8017:80"
     volumes:
       - .:/var/www
       - ./nginx.conf:/etc/nginx/conf.d/default.conf
@@ -40,8 +40,24 @@ services:
     networks:
       - laravel
 
+  minio:
+    image: minio/minio
+    container_name: minio
+    restart: unless-stopped
+    ports:
+      - "9000:9000"
+    environment:
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+    command: server /data
+    volumes:
+      - minio_data:/data
+    networks:
+      - laravel
+
 networks:
   laravel:
 
 volumes:
   mysql_data:
+  minio_data:

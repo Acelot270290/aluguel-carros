@@ -4,7 +4,7 @@ namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
 
-class RegisterRequest extends FormRequest
+class UpdateUserRequest extends FormRequest
 {
     public function authorize()
     {
@@ -15,8 +15,8 @@ class RegisterRequest extends FormRequest
     {
         return [
             'name' => 'required|string|max:255',
-            'email' => 'required|string|email|max:255|unique:users',
-            'password' => 'required|string|min:6|confirmed',
+            'email' => 'required|string|email|max:255|unique:users,email,' . $this->user->id,
+            'password' => 'nullable|string|min:6|confirmed',
             'zip_code' => 'nullable|string|max:20',
             'street' => 'nullable|string|max:255',
             'number' => 'nullable|string|max:20',
