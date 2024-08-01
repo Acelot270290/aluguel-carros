@@ -11,5 +11,7 @@ class DatabaseSeeder extends Seeder
         $this->call(AdminSeeder::class);
 
         \App\Models\User::factory(20)->create();
+        \App\Models\Carro::factory(10)->create();
+        \App\Models\Aluguel::factory(30)->create(); // Gerando aluguéis com relacionamento
     }
 }

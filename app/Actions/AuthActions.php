@@ -10,30 +10,62 @@ use Tymon\JWTAuth\Exceptions\JWTException;
 use App\Http\Requests\RegisterRequest;
 use App\Http\Requests\LoginRequest;
 use App\Http\Requests\UpdateUserRequest;
-use Tymon\JWTAuth\Exceptions\UserNotDefinedException;
+use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\File;
 
 class AuthActions
 {
     public function register(RegisterRequest $request)
     {
-        $user = User::create([
-            'name' => $request->name,
-            'email' => $request->email,
-            'email_verified_at' => now(),
-            'password' => Hash::make($request->password),
-            'remember_token' => Str::random(10),
-            'zip_code' => $request->zip_code,
-            'street' => $request->street,
-            'number' => $request->number,
-            'city' => $request->city,
-            'neighborhood' => $request->neighborhood,
-            'state' => $request->state,
-            'img' => $request->img,
-        ]);
+        try {
+            $imgUrl = null;
+            if ($request->hasFile('img')) {
 
-        $token = JWTAuth::fromUser($user);
+                $file = $request->file('img');
+                $filename = date('YmdHis') . '_' . time() . '_' . Str::random(10) . '.' . $file->getClientOriginalExtension();
+                $destinationPath = public_path('usuarios');
 
-        return compact('user', 'token');
+                // Verifica se o diretório 'public/usuarios' existe, se não, cria
+                if (!File::isDirectory($destinationPath)) {
+                    File::makeDirectory($destinationPath, 0777, true, true);
+                }
+
+                try {
+                    // Move o arquivo para a pasta 'public/usuarios'
+                    $file->move($destinationPath, $filename);
+                    $imgUrl = url('usuarios/' . $filename);
+                } catch (\Exception $e) {
+                    Log::error('File storage error', ['message' => $e->getMessage()]);
+                    return response()->json(['error' => 'File storage error: ' . $e->getMessage()], 500);
+                }
+            }
+
+            $user = User::create([
+                'name' => $request->name,
+                'email' => $request->email,
+                'email_verified_at' => now(),
+                'password' => Hash::make($request->password),
+                'remember_token' => Str::random(10),
+                'zip_code' => $request->zip_code,
+                'street' => $request->street,
+                'number' => $request->number,
+                'city' => $request->city,
+                'neighborhood' => $request->neighborhood,
+                'state' => $request->state,
+                'img' => $imgUrl,
+            ]);
+
+            $token = JWTAuth::fromUser($user);
+
+            return response()->json(compact('user', 'token'), 201);
+        } catch (QueryException $e) {
+            if ($e->getCode() === '23000') {
+                return response()->json(['error' => 'Email já cadastrado'], 409);
+            }
+            return response()->json(['error' => 'Erro ao registrar usuário'], 500);
+        }
     }
 
     public function login(LoginRequest $request)
@@ -41,7 +73,7 @@ class AuthActions
         $credentials = $request->only('email', 'password');
 
         try {
-            if (! $token = JWTAuth::attempt($credentials)) {
+            if (!$token = JWTAuth::attempt($credentials)) {
                 return ['error' => 'invalid_credentials', 'status' => 400];
             }
         } catch (JWTException $e) {
@@ -64,7 +96,7 @@ class AuthActions
     public function getAuthenticatedUser()
     {
         try {
-            if (! $user = JWTAuth::parseToken()->authenticate()) {
+            if (!$user = JWTAuth::parseToken()->authenticate()) {
                 return ['error' => 'user_not_found', 'status' => 404];
             }
         } catch (Tymon\JWTAuth\Exceptions\TokenExpiredException $e) {
@@ -117,15 +149,19 @@ class AuthActions
         }
     }
 
-    public function deleteUser(User $user)
+    public function deleteUser($id)
     {
         try {
+            $user = User::findOrFail($id);
+
             $user->delete();
-            return ['success' => 'User deleted successfully'];
+            return response()->json(['success' => 'User deleted successfully']);
+        } catch (ModelNotFoundException $e) {
+            return response()->json(['error' => 'User not found'], 404);
         } catch (UserNotDefinedException $e) {
-            return ['error' => 'User not authenticated', 'status' => 401];
+            return response()->json(['error' => 'User not authenticated'], 401);
         } catch (JWTException $e) {
-            return ['error' => 'Token error: ' . $e->getMessage(), 'status' => 401];
+            return response()->json(['error' => 'Token error: ' . $e->getMessage()], 401);
         }
     }
 }
